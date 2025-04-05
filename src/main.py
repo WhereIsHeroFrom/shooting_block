@@ -13,7 +13,12 @@ images = []
 for x in [2, 4, 8, 16, 32, 64]:
     image = pygame.transform.scale(pygame.image.load('pic/blocknum/%d.png' % x), (block_size, block_size))
     images.append(image)
-        
+
+class MoveState:
+    FREE = 0  # 自由落体
+    MOVE = 1  # 移动到目标位置 
+    STAY = 2  # 静止
+
 class Block:
     def __init__(self, pos, target_pos, level):
         self.level = level
@@ -22,8 +27,7 @@ class Block:
         self.speed = [0.1, -0.3]
         self.acc = [0, 0.0002]
         self.pos = list(pos)
-        self.active = True  # 新增状态标识  
-
+        self.move_state = MoveState.FREE
         
         # 计算初始速度矢量
         rad = self.calc_degree(pos, target_pos)
@@ -31,12 +35,28 @@ class Block:
         self.speed[1] += 0.3 * math.sin(rad)
 
     def update_movement(self, delta_time):
-        if self.active:  # 仅活动方块需要更新物理运动
+        if self.move_state == MoveState.FREE:  # 仅活动方块需要更新物理运动
             self.speed[0] += self.acc[0] * delta_time
             self.speed[1] += self.acc[1] * delta_time
             self.pos[0] += self.speed[0] * delta_time
             self.pos[1] += self.speed[1] * delta_time
             self.rect.center = self.pos
+        elif self.move_state == MoveState.MOVE:
+            self.pos[0] += (self.target_pos[0] - self.pos[0]) / 5
+            self.pos[1] += (self.target_pos[1] - self.pos[1]) / 5
+            if abs(self.target_pos[0] - self.pos[0]) < 0.01 and abs(self.target_pos[1] - self.pos[1]) < 0.01:
+                self.pos = self.target_pos
+                self.move_state = MoveState.STAY
+            self.rect.center = self.pos
+    
+    def set_move_state(self, move_state, grid_pos = None):
+        self.move_state = move_state
+        self.grid_pos = grid_pos
+        if grid_pos:
+            target_x = grid_pos[0]*block_size+block_size//2 + screen_width//2
+            target_y = grid_pos[1]*block_size+block_size//2
+            self.target_pos = (target_x, target_y)
+        
 
     def calc_degree(self, ori, tar):
         dx = tar[0] - ori[0]
@@ -57,13 +77,13 @@ class Block:
     
 # 分离为两个列表
 active_blocks = []  # 发射中的方块
-received_blocks = []  # 已接收的方块
-
+received_blocks = {}
 back_blocks = {}
 for i in range(screen_height//block_size):
     for j in range(screen_width//2//block_size):
         rect = pygame.rect.Rect(screen_width//2 + j*block_size, i*block_size, block_size, block_size)
         back_blocks[ (i,j) ] = rect
+        received_blocks[ (i, j) ] = None
     
 running = True
 clock = pygame.time.Clock()
@@ -97,50 +117,20 @@ while running:
         
         # 下边界接收条件（保持原始逻辑）
         if block.rect.bottom > screen_height and block.rect.x > screen_width/2:
-            block.speed = [0, 0]
-            block.acc = [0, 0]
-            block.active = False
+            block_x = (block.rect.center[0]-screen_width//2)//block_size
+            block_y = block.rect.center[1]//block_size
+            block.set_move_state(MoveState.MOVE, (block_x, block_y))
             to_receive.append(block)
-        
-        # 与已接收方块的碰撞检测[1,3]
-        for received in received_blocks:
-            if block.rect.colliderect(received.rect):
-                if block.level == received.level:
-                    active_blocks.remove(block)
-                    received.level_up()
-                    break
-                if block.is_horizontal_collision(received):
-                    block.speed[0] = 0
-                    block.acc[0] = 0
-                else:
-                    block.speed = [0, 0]
-                    block.acc = [0, 0]
-                    block.active = False
-                    to_receive.append(block)
-                    break
 
     # 转移符合条件的方块
     for block in to_receive:
         if block in active_blocks:
             active_blocks.remove(block)
-            received_blocks.append(block)
+            received_blocks[ block.grid_pos ] = block
     
-    received_blocks.sort(key = lambda b : b.rect.y)
-    rb_len = len(received_blocks)
-    for i in range(rb_len):
-        flag = False
-        a = received_blocks[i]
-        for j in range(i+1, rb_len):
-            b = received_blocks[j]
-            if a.level != b.level:
-                continue
-            if a.rect.colliderect(b.rect):
-                if b.level_up():
-                    received_blocks.remove(a)
-                    flag = True
-                    break
-        if flag:
-            break
+    for ij, block in received_blocks.items():
+        if block:
+            block.update_movement(delta_time)
 
     for (i,j), rect in back_blocks.items():
         screen.blit(back_image, rect)
@@ -148,8 +138,9 @@ while running:
     # 绘制所有方块
     for block in active_blocks:
         screen.blit(block.image, block.rect)
-    for block in received_blocks:
-        screen.blit(block.image, block.rect)
+    for ij, block in received_blocks.items():
+        if block:
+            screen.blit(block.image, block.rect )
 
     pygame.display.flip()
     delta_time = clock.tick(60)
