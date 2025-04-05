@@ -18,6 +18,7 @@ class MoveState:
     FREE = 0  # 自由落体
     MOVE = 1  # 移动到目标位置 
     STAY = 2  # 静止
+    FALL = 3  # 下落状态
 
 class Block:
     def __init__(self, pos, target_pos, level):
@@ -48,14 +49,22 @@ class Block:
                 self.pos = self.target_pos
                 self.move_state = MoveState.STAY
             self.rect.center = self.pos
+        elif self.move_state == MoveState.FALL:
+            self.pos[0] += (self.target_pos[0] - self.pos[0]) / 5
+            self.speed[1] += self.acc[1] * delta_time
+            self.pos[1] += self.speed[1] * delta_time
+            if self.pos[1] > self.target_pos[1]:
+                self.pos = self.target_pos
+                self.move_state = MoveState.STAY
+            self.rect.center = self.pos
     
     def set_move_state(self, move_state, grid_pos = None):
         self.move_state = move_state
         self.grid_pos = grid_pos
         if grid_pos:
-            target_x = grid_pos[0]*block_size+block_size//2 + screen_width//2
-            target_y = grid_pos[1]*block_size+block_size//2
-            self.target_pos = (target_x, target_y)
+            target_x = grid_pos[1]*block_size+block_size//2 + screen_width//2
+            target_y = grid_pos[0]*block_size+block_size//2
+            self.target_pos = [target_x, target_y]
         
 
     def calc_degree(self, ori, tar):
@@ -120,14 +129,14 @@ while running:
         
         # 下边界接收条件（保持原始逻辑）
         if block.rect.bottom > screen_height and block.rect.x > screen_width/2:
-            block.set_move_state(MoveState.MOVE, (block_x, block_y))
+            block.set_move_state(MoveState.MOVE, (block_y, block_x))
             to_receive.append(block)
         else:
             collid = False
             for dx in range(-1, 2):
                 for dy in range(-1, 2):
-                    if received_blocks.get( (block_x+dx, block_y+dy), None ):
-                        block.set_move_state(MoveState.MOVE, (block_x, block_y))
+                    if received_blocks.get( (block_y+dy, block_x+dx), None ):
+                        block.set_move_state(MoveState.MOVE, (block_y, block_x))
                         to_receive.append(block)
 
     # 转移符合条件的方块
@@ -135,6 +144,25 @@ while running:
         if block in active_blocks:
             active_blocks.remove(block)
             received_blocks[ block.grid_pos ] = block
+    
+    # 处理下落逻辑
+    max_col = (screen_width // 2) // block_size
+    max_row = screen_height // block_size
+    for j in range(max_col):
+        last_row = max_row-1
+        for i in range(max_row-1, -1, -1):
+            rb = received_blocks.get( (i, j) )
+            if not rb:
+                continue
+            if i == last_row:
+                last_row -= 1
+                continue
+            if rb.move_state != MoveState.FALL:
+                rb.set_move_state(MoveState.FALL, (last_row, j))
+                received_blocks[ (last_row, j) ] = rb
+                received_blocks[ (i, j) ] = None
+                last_row -= 1
+
     
     for ij, block in received_blocks.items():
         if block:
