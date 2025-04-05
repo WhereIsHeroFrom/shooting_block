@@ -26,11 +26,11 @@ class MoveState:
     TRIP = 4  # 三消逻辑
 
 class Block:
-    def __init__(self, pos, target_pos, level):
+    def __init__(self, pos, target_pos, level, speed):
         self.level = level
         self.image = images[self.level]
         self.rect = self.image.get_rect(center=pos)
-        self.speed = [0.1, -0.3]
+        self.speed = speed
         self.acc = [0, 0.0002]
         self.pos = list(pos)
         self.move_state = MoveState.FREE
@@ -128,7 +128,9 @@ while running:
             mouse_pos = pygame.mouse.get_pos()
             import random
             level = random.randint(0, 2)
-            active_blocks.append(Block([0, screen_height], mouse_pos, level))
+            for i in range(10):
+                speed = [0.1 + i/20, -0.3 - i/30]
+                active_blocks.append(Block([0, screen_height], mouse_pos, level, speed))
         
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_d:
