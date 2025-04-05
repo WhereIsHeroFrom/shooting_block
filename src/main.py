@@ -306,6 +306,7 @@ while running:
                 cnt += 1
             if cnt < 3:
                 continue
+            curr_score += max_level * cnt * cnt * cnt
             for k in range(cnt):
                 kb = received_blocks.get( (i+k, j) )
                 kb.set_move_state(MoveState.TRIP, run_time = 3)
