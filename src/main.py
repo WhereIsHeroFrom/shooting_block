@@ -4,6 +4,7 @@ pygame.init()
 
 screen_width, screen_height = 1408, 704
 block_size = 64
+max_level = 5
 screen = pygame.display.set_mode((screen_width, screen_height))
 
 # 加载并缩放图片
@@ -19,6 +20,7 @@ class MoveState:
     MOVE = 1  # 移动到目标位置 
     STAY = 2  # 静止
     FALL = 3  # 下落状态
+    TRIP = 4  # 三消逻辑
 
 class Block:
     def __init__(self, pos, target_pos, level):
@@ -49,6 +51,7 @@ class Block:
             if abs(self.target_pos[0] - self.pos[0]) < 1 and abs(self.target_pos[1] - self.pos[1]) < 1:
                 self.pos = self.target_pos
                 self.move_state = MoveState.STAY
+                self.locked = False
             self.rect.center = self.pos
         elif self.move_state == MoveState.FALL:
             self.pos[0] += (self.target_pos[0] - self.pos[0]) / 5
@@ -57,17 +60,27 @@ class Block:
             if self.pos[1] > self.target_pos[1]:
                 self.pos = self.target_pos
                 self.move_state = MoveState.STAY
+                self.locked = False
+            self.rect.center = self.pos
+        elif self.move_state == MoveState.TRIP:
+            self.pos[0] -= delta_time / 10
+            self.pos[1] += 5*(2.5-self.run_time)
+            self.run_time -= delta_time/1000.0
+            
+            if self.run_time < 0:
+                self.move_state = MoveState.STAY
+                self.locked = False
             self.rect.center = self.pos
     
-    def set_move_state(self, move_state, grid_pos = None):
+    def set_move_state(self, move_state, grid_pos = None, run_time = None):
         self.move_state = move_state
         self.grid_pos = grid_pos
+        self.run_time = run_time
         if grid_pos:
             target_x = grid_pos[1]*block_size+block_size//2 + screen_width//2
             target_y = grid_pos[0]*block_size+block_size//2
             self.target_pos = [target_x, target_y]
         
-
     def calc_degree(self, ori, tar):
         dx = tar[0] - ori[0]
         dy = tar[1] - ori[1]
@@ -113,6 +126,42 @@ while running:
             import random
             level = random.randint(0, 2)
             active_blocks.append(Block([0, screen_height], mouse_pos, level))
+        
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_d:
+                # 处理右移逻辑
+                max_col = (screen_width // 2) // block_size
+                max_row = screen_height // block_size
+                for i in range(max_row):
+                    last_col = max_col-1
+                    for j in range(max_col-1, -1, -1):
+                        rb = received_blocks.get( (i, j) )
+                        if not rb:
+                            continue
+                        if j == last_col:
+                            last_col -= 1
+                            continue
+                        rb.set_move_state(MoveState.MOVE, (i, last_col))
+                        received_blocks[ (i, last_col) ] = rb
+                        received_blocks[ (i, j) ] = None
+                        last_col -= 1
+            elif event.key == pygame.K_a:
+                # 处理左移逻辑
+                max_col = (screen_width // 2) // block_size
+                max_row = screen_height // block_size
+                for i in range(max_row):
+                    last_col = 0
+                    for j in range(max_col):
+                        rb = received_blocks.get( (i, j) )
+                        if not rb:
+                            continue
+                        if j == last_col:
+                            last_col += 1
+                            continue
+                        rb.set_move_state(MoveState.MOVE, (i, last_col))
+                        received_blocks[ (i, last_col) ] = rb
+                        received_blocks[ (i, j) ] = None
+                        last_col += 1
 
     screen.fill((0, 0, 0))
 
@@ -184,6 +233,8 @@ while running:
                 continue
             if rb.locked:
                 continue
+            if rb.level == max_level:
+                continue
             for left in [(i-1,j), (i,j-1)]:
                 lrb = received_blocks.get(left)
                 if not lrb:
@@ -201,6 +252,62 @@ while running:
                 received_blocks[left] = None
                 break
     
+    # 处理三消逻辑
+    for i in range(max_row):
+        for j in range(max_col):
+            rb = received_blocks.get( (i, j) )
+            if not rb:
+                continue
+            if rb.level != max_level:
+                continue
+            if rb.move_state != MoveState.STAY:
+                continue
+            cnt = 1
+            for k in range(1, max_col-j):
+                kb = received_blocks.get( (i, j+k) )
+                if not kb:
+                    break
+                if kb.level != max_level:
+                    break
+                if kb.move_state != MoveState.STAY:
+                    break
+                cnt += 1
+            if cnt < 3:
+                continue
+            for k in range(cnt):
+                kb = received_blocks.get( (i, j+k) )
+                kb.set_move_state(MoveState.TRIP, run_time = 3)
+                remove_blocks[(i, j+k)] = kb
+                received_blocks[(i, j+k)] = None
+
+    # 处理三消逻辑
+    for j in range(max_col):
+        for i in range(max_row):
+            rb = received_blocks.get( (i, j) )
+            if not rb:
+                continue
+            if rb.level != max_level:
+                continue
+            if rb.move_state != MoveState.STAY:
+                continue
+            cnt = 1
+            for k in range(1, max_row-i):
+                kb = received_blocks.get( (i+k, j) )
+                if not kb:
+                    break
+                if kb.level != max_level:
+                    break
+                if kb.move_state != MoveState.STAY:
+                    break
+                cnt += 1
+            if cnt < 3:
+                continue
+            for k in range(cnt):
+                kb = received_blocks.get( (i+k, j) )
+                kb.set_move_state(MoveState.TRIP, run_time = 3)
+                remove_blocks[(i+k, j)] = kb
+                received_blocks[(i+k, j)] = None
+    
     for ij, block in received_blocks.items():
         if block:
             block.update_movement(delta_time)
@@ -210,7 +317,7 @@ while running:
         if block:
             block.update_movement(delta_time)
             if block.move_state == MoveState.STAY:
-                if received_blocks[ij]:
+                if received_blocks.get(ij):
                     received_blocks[ij].set_lock(False)
                     received_blocks[ij].level_up()
                 del remove_blocks[ij]
