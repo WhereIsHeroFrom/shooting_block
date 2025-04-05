@@ -29,6 +29,7 @@ class Block:
         self.acc = [0, 0.0002]
         self.pos = list(pos)
         self.move_state = MoveState.FREE
+        self.locked = False
         
         # 计算初始速度矢量
         rad = self.calc_degree(pos, target_pos)
@@ -45,7 +46,7 @@ class Block:
         elif self.move_state == MoveState.MOVE:
             self.pos[0] += (self.target_pos[0] - self.pos[0]) / 5
             self.pos[1] += (self.target_pos[1] - self.pos[1]) / 5
-            if abs(self.target_pos[0] - self.pos[0]) < 0.01 and abs(self.target_pos[1] - self.pos[1]) < 0.01:
+            if abs(self.target_pos[0] - self.pos[0]) < 1 and abs(self.target_pos[1] - self.pos[1]) < 1:
                 self.pos = self.target_pos
                 self.move_state = MoveState.STAY
             self.rect.center = self.pos
@@ -76,8 +77,13 @@ class Block:
         dx = min(self.rect.right, received.rect.right) - max(self.rect.left, received.rect.left)
         dy = min(self.rect.bottom, received.rect.bottom) - max(self.rect.top, received.rect.top)
         return dx <= dy
+
+    def set_lock(self, locked):
+        self.locked = locked
     
     def level_up(self):
+        if self.locked:
+            return False
         if self.level < 5:
             self.level += 1
             self.image = images[self.level]
@@ -88,6 +94,7 @@ class Block:
 active_blocks = []  # 发射中的方块
 received_blocks = {}
 back_blocks = {}
+remove_blocks = {}
 for i in range(screen_height//block_size):
     for j in range(screen_width//2//block_size):
         rect = pygame.rect.Rect(screen_width//2 + j*block_size, i*block_size, block_size, block_size)
@@ -162,11 +169,47 @@ while running:
                 received_blocks[ (last_row, j) ] = rb
                 received_blocks[ (i, j) ] = None
                 last_row -= 1
-
+    
+    # 处理合成逻辑
+    for j in range(max_col):
+        for i in range(max_row-1, -1, -1):
+            rb = received_blocks.get( (i, j) )
+            if not rb:
+                continue
+            if rb.move_state != MoveState.STAY:
+                continue
+            if rb.locked:
+                continue
+            for left in [(i-1,j), (i,j-1)]:
+                lrb = received_blocks.get(left)
+                if not lrb:
+                    continue
+                if lrb.move_state != MoveState.STAY:
+                    continue
+                if lrb.level != rb.level:
+                    continue
+                if lrb.locked:
+                    continue
+                lrb.set_lock(True)
+                rb.set_lock(True)
+                lrb.set_move_state(MoveState.MOVE, (i,j))
+                remove_blocks[(i,j)] = lrb
+                received_blocks[left] = None
+                break
     
     for ij, block in received_blocks.items():
         if block:
             block.update_movement(delta_time)
+    
+    rb_list = [(ij, block) for ij, block in remove_blocks.items()]
+    for (ij, block) in rb_list:
+        if block:
+            block.update_movement(delta_time)
+            if block.move_state == MoveState.STAY:
+                if received_blocks[ij]:
+                    received_blocks[ij].set_lock(False)
+                    received_blocks[ij].level_up()
+                del remove_blocks[ij]
 
     for (i,j), rect in back_blocks.items():
         screen.blit(back_image, rect)
@@ -177,7 +220,9 @@ while running:
     for ij, block in received_blocks.items():
         if block:
             screen.blit(block.image, block.rect )
-
+    for ij, block in remove_blocks.items():
+        if block:
+            screen.blit(block.image, block.rect )
     pygame.display.flip()
     delta_time = clock.tick(60)
 
