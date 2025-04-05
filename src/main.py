@@ -142,9 +142,13 @@ while running:
             collid = False
             for dx in range(-1, 2):
                 for dy in range(-1, 2):
-                    if received_blocks.get( (block_y+dy, block_x+dx), None ):
-                        block.set_move_state(MoveState.MOVE, (block_y, block_x))
-                        to_receive.append(block)
+                    bk = received_blocks.get( (block_y+dy, block_x+dx), None )
+                    if bk and block.rect.colliderect(bk.rect):
+                        if block_x >= 0:
+                            block.set_move_state(MoveState.MOVE, (block_y, block_x))
+                            to_receive.append(block)
+                        else:
+                            block.speed[0] = 0
 
     # 转移符合条件的方块
     for block in to_receive:
