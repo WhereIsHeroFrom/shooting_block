@@ -16,6 +16,7 @@ images = []
 for x in [2, 4, 8, 16, 32, 64]:
     image = pygame.transform.scale(pygame.image.load('pic/blocknum/%d.png' % x), (block_size, block_size))
     images.append(image)
+back_ground = pygame.transform.scale(pygame.image.load('pic/background.png'), (screen_width//2, screen_height))
 
 class MoveState:
     FREE = 0  # 自由落体
@@ -327,6 +328,7 @@ while running:
                     received_blocks[ij].level_up()
                 del remove_blocks[ij]
 
+    screen.blit(back_ground, back_ground.get_rect()) 
     for (i,j), rect in back_blocks.items():
         screen.blit(back_image, rect)
 
@@ -341,7 +343,7 @@ while running:
             screen.blit(block.image, block.rect )
 
     show_score += (curr_score - show_score) / 5
-    text_surface = font.render(str(int(show_score)), True, (255,255,255), (0,0,0))
+    text_surface = font.render(str(int(show_score)), True, (255,255,255))
     text_rect = text_surface.get_rect()
     text_rect.x = 10
     text_rect.y = 10
