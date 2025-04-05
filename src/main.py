@@ -6,7 +6,9 @@ screen_width, screen_height = 1408, 704
 block_size = 64
 max_level = 5
 screen = pygame.display.set_mode((screen_width, screen_height))
-
+font = pygame.font.Font(None, 199)
+show_score = 0
+curr_score = 0
 # 加载并缩放图片
 scaled_image = pygame.transform.scale(pygame.image.load('pic/block.png'), (block_size, block_size))
 back_image = pygame.transform.scale(pygame.image.load('pic/back.png'), (block_size, block_size))
@@ -245,6 +247,7 @@ while running:
                     continue
                 if lrb.locked:
                     continue
+                curr_score += (rb.level+1)
                 lrb.set_lock(True)
                 rb.set_lock(True)
                 lrb.set_move_state(MoveState.MOVE, (i,j))
@@ -274,6 +277,7 @@ while running:
                 cnt += 1
             if cnt < 3:
                 continue
+            curr_score += max_level * cnt * cnt * cnt
             for k in range(cnt):
                 kb = received_blocks.get( (i, j+k) )
                 kb.set_move_state(MoveState.TRIP, run_time = 3)
@@ -334,6 +338,14 @@ while running:
     for ij, block in remove_blocks.items():
         if block:
             screen.blit(block.image, block.rect )
+
+    show_score += (curr_score - show_score) / 5
+    text_surface = font.render(str(int(show_score)), True, (255,255,255), (0,0,0))
+    text_rect = text_surface.get_rect()
+    text_rect.x = 10
+    text_rect.y = 10
+    screen.blit(text_surface, text_rect)
+
     pygame.display.flip()
     delta_time = clock.tick(60)
 
