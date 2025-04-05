@@ -114,13 +114,21 @@ while running:
             block.speed[0] = abs(block.speed[0])
         if block.rect.top < 0:
             block.speed[1] = abs(block.speed[1])
+    
+        block_x = (block.rect.center[0]-screen_width//2)//block_size
+        block_y = block.rect.center[1]//block_size
         
         # 下边界接收条件（保持原始逻辑）
         if block.rect.bottom > screen_height and block.rect.x > screen_width/2:
-            block_x = (block.rect.center[0]-screen_width//2)//block_size
-            block_y = block.rect.center[1]//block_size
             block.set_move_state(MoveState.MOVE, (block_x, block_y))
             to_receive.append(block)
+        else:
+            collid = False
+            for dx in range(-1, 2):
+                for dy in range(-1, 2):
+                    if received_blocks.get( (block_x+dx, block_y+dy), None ):
+                        block.set_move_state(MoveState.MOVE, (block_x, block_y))
+                        to_receive.append(block)
 
     # 转移符合条件的方块
     for block in to_receive:
