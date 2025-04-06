@@ -25,6 +25,18 @@ class MoveState:
     FALL = 3  # 下落状态
     TRIP = 4  # 三消逻辑
 
+class SoundIdx:
+    COMBINE = 0
+    SHIFT = 1
+    SHOOT = 2
+    BOMB = 3
+    TRIP = 4
+    MAX = 5
+SOUNDS = []
+for i in range(0, SoundIdx.MAX):
+    sound = pygame.mixer.Sound('snd/%d.MP3' % i)
+    SOUNDS.append(sound)
+
 class Block:
     def __init__(self, pos, target_pos, level, speed):
         self.level = level
@@ -128,12 +140,14 @@ while running:
             mouse_pos = pygame.mouse.get_pos()
             import random
             level = random.randint(0, 2)
+            SOUNDS[SoundIdx.SHOOT].play()
             for i in range(10):
                 speed = [0.1 + i/20, -0.3 - i/30]
                 active_blocks.append(Block([0, screen_height], mouse_pos, level, speed))
         
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_d:
+                SOUNDS[SoundIdx.SHIFT].play()
                 # 处理右移逻辑
                 max_col = (screen_width // 2) // block_size
                 max_row = screen_height // block_size
@@ -151,6 +165,7 @@ while running:
                         received_blocks[ (i, j) ] = None
                         last_col -= 1
             elif event.key == pygame.K_a:
+                SOUNDS[SoundIdx.SHIFT].play()
                 # 处理左移逻辑
                 max_col = (screen_width // 2) // block_size
                 max_row = screen_height // block_size
@@ -180,10 +195,12 @@ while running:
         # 保留原始边界碰撞逻辑
         if block.rect.right > screen_width:
             block.speed[0] = -abs(block.speed[0])
+            SOUNDS[SoundIdx.BOMB].play()
         if block.rect.left < 0:
             block.speed[0] = abs(block.speed[0])
         if block.rect.top < 0:
             block.speed[1] = abs(block.speed[1])
+            SOUNDS[SoundIdx.BOMB].play()
     
         block_x = (block.rect.center[0]-screen_width//2)//block_size
         block_y = block.rect.center[1]//block_size
@@ -192,6 +209,7 @@ while running:
         if block.rect.bottom > screen_height and block.rect.x > screen_width/2:
             block.set_move_state(MoveState.MOVE, (block_y, block_x))
             to_receive.append(block)
+            SOUNDS[SoundIdx.BOMB].play()
         else:
             collid = False
             for dx in range(-1, 2):
@@ -251,6 +269,7 @@ while running:
                 if lrb.locked:
                     continue
                 curr_score += (rb.level+1)
+                SOUNDS[SoundIdx.COMBINE].play()
                 lrb.set_lock(True)
                 rb.set_lock(True)
                 lrb.set_move_state(MoveState.MOVE, (i,j))
@@ -281,6 +300,7 @@ while running:
             if cnt < 3:
                 continue
             curr_score += max_level * cnt * cnt * cnt
+            SOUNDS[SoundIdx.TRIP].play()
             for k in range(cnt):
                 kb = received_blocks.get( (i, j+k) )
                 kb.set_move_state(MoveState.TRIP, run_time = 3)
@@ -310,6 +330,7 @@ while running:
             if cnt < 3:
                 continue
             curr_score += max_level * cnt * cnt * cnt
+            SOUNDS[SoundIdx.TRIP].play()
             for k in range(cnt):
                 kb = received_blocks.get( (i+k, j) )
                 kb.set_move_state(MoveState.TRIP, run_time = 3)
